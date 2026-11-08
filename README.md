@@ -24,6 +24,13 @@ Assistant de publication pour **La Grande Librairie de Mordheim** : Google Docs 
 
 Consultez [INSTALLATION.md](INSTALLATION.md) avant toute mise en production.
 
+## Synchronisation GitHub → Apps Script
+
+Le dépôt contient maintenant un [workflow GitHub Actions avec clasp](.github/workflows/apps-script.yml). Le code est vérifié à chaque changement sur `main` ; l'envoi automatique à Apps Script est une option à activer après la première connexion Google. **L'envoi actualise le brouillon Apps Script, pas les déploiements Web publics.**
+
+➡️ [Guide de configuration pas à pas (Windows / Google / GitHub)](docs/CLASP-SYNC.md).
+
+
 ## Limites
 
 Le rendu de Google Docs n’est pas un export au pixel près (tabulations, images et tableaux complexes). La hauteur de l’iframe Google Sites peut nécessiter un réglage manuel. Après chaque modification des sources, il faut créer une nouvelle version des déploiements Apps Script. Les commentaires et les documents privés ne doivent jamais être publiés dans ce dépôt.
