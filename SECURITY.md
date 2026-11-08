@@ -11,3 +11,9 @@ Ce dépôt contient le code de GLM Publisher, **pas** les données éditoriales 
 - Ne jamais confondre une publication GitHub et un déploiement Apps Script : les commits GitHub ne mettent pas le site public à jour automatiquement.
 
 Le projet est encore un prototype et **n'a pas subi d'audit de sécurité indépendant**. Définir une licence avant de solliciter des contributions externes.
+
+## Synchronisation GitHub Actions
+
+Le workflow n'utilise les identifiants Google que sur les exécuteurs GitHub Actions, via le secret `CLASPRC_JSON`. **Ce secret contient un jeton d'actualisation sensible** : ne jamais l'afficher, le copier dans une issue ou le commiter. La variable `GLM_SCRIPT_ID` désigne le projet Apps Script et **ne doit pas être confondue avec les identifiants de publication**. Le push automatique est désactivé par défaut ; il nécessite `GLM_CLASP_AUTO_SYNC=true`.
+
+Seuls trois fichiers sont transférés vers Apps Script : `Code.gs`, `Admin.html` et `appsscript.json`. La création d'une version de déploiement Web reste manuelle. La synchronisation écrase l'ensemble des fichiers de code du **brouillon Apps Script cible** : sauvegarder les modifications non commitées avant activation.
