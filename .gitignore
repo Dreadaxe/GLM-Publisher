@@ -1,0 +1,16 @@
+# Local credentials, runtime state and exports
+.clasp.json
+.env
+.env.*
+!.env.example
+credentials.json
+token.json
+*.pem
+*.p12
+*.key
+private/
+exports/
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
