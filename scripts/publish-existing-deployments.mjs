@@ -28,7 +28,8 @@ function findOne(list, test, description) {
   return candidates[0];
 }
 
-const source = fs.readFileSync('.clasp-stage/Code.gs','utf8');
+const sourceFile = fs.existsSync('.clasp-stage/Code.js') ? '.clasp-stage/Code.js' : '.clasp-stage/Code.gs';
+const source = fs.readFileSync(sourceFile,'utf8');
 if (!source.includes('GLM Publisher v0.5') || !source.includes('UnifrakturMaguntia')) {
   throw new Error('Publication interrompue : le brouillon Apps Script ne correspond pas à GLM Publisher v0.5.');
 }
