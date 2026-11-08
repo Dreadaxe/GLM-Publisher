@@ -1,0 +1,82 @@
+name: Vérifier et synchroniser Apps Script
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "Code.gs"
+      - "Admin.html"
+      - "appsscript.json"
+      - "scripts/**"
+      - ".github/workflows/apps-script.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Code.gs"
+      - "Admin.html"
+      - "appsscript.json"
+      - "scripts/**"
+      - ".github/workflows/apps-script.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: glm-clasp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verifier:
+    name: Vérifier les sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node scripts/verify-source.mjs
+
+  synchroniser:
+    name: Synchroniser le brouillon Apps Script
+    needs: verifier
+    # Pour la sécurité, aucun push automatique tant que la variable
+    # GLM_CLASP_AUTO_SYNC n'a pas la valeur exacte "true".
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || vars.GLM_CLASP_AUTO_SYNC == 'true')
+    runs-on: ubuntu-latest
+    environment: apps-script
+    env:
+      GLM_SCRIPT_ID: ${{ vars.GLM_SCRIPT_ID }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Vérifier la configuration privée
+        shell: bash
+        run: |
+          if [[ -z "$GLM_SCRIPT_ID" || -z "$CLASPRC_JSON" ]]; then
+            echo "::error::Configurer la variable GLM_SCRIPT_ID et le secret CLASPRC_JSON dans GitHub."
+            exit 1
+          fi
+      - name: Préparer uniquement les trois fichiers Apps Script
+        shell: bash
+        run: |
+          mkdir -p .clasp-stage
+          cp Code.gs Admin.html appsscript.json .clasp-stage/
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          node -e "const fs=require('node:fs'); fs.writeFileSync('.clasp.json',JSON.stringify({scriptId:process.env.GLM_SCRIPT_ID,rootDir:'.clasp-stage'},null,2));"
+          chmod 600 .clasp.json
+          test "$(find .clasp-stage -maxdepth 1 -type f | wc -l)" -eq 3
+      - name: Installer clasp 3.4.1
+        run: npm install --global @google/clasp@3.4.1
+      - name: Vérifier la liste des fichiers envoyés
+        run: clasp show-file-status
+      - name: Envoyer le code dans le brouillon Apps Script
+        # Remplace tout le CODE de l'éditeur Apps Script, sans toucher au
+        # Google Sheets ni aux versions Web déjà déployées.
+        run: clasp push --force
