@@ -55,7 +55,7 @@ Une fois les fichiers modifiés sur GitHub, **l'application déployée ne change
 
 Méthode manuelle : recopier `Code.gs`, `Admin.html` et le manifeste modifié dans Apps Script, enregistrer, puis mettre les **deux déploiements** sur **Nouvelle version**.
 
-Méthode développeur : connecter le projet Apps Script à une copie Git via [clasp](https://github.com/google/clasp). Un exemple de `.clasp.json` est fourni ; ne jamais versionner le vrai fichier `.clasp.json` ni les identifiants de connexion. Un futur workflow de synchronisation peut être configuré séparément après vérification des permissions.
+**Méthode GitHub Actions (déjà préparée) :** suivre le [guide de synchronisation clasp](docs/CLASP-SYNC.md). Le workflow met à jour le **code brouillon**. Les déploiements publics et administratifs doivent être actualisés ensuite lors d'une publication validée. Les identifiants OAuth restent exclusivement dans GitHub Secrets, jamais dans les fichiers versionnés.
 
 ## 6. Vigilance
 
