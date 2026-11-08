@@ -46,6 +46,7 @@ jobs:
       - name: Installer clasp
         run: npm install --global @google/clasp@3.4.1
       - name: Lire le brouillon présent dans Google Apps Script
+        # clasp pull écrit les sources Google Apps Script sous Code.js (pas Code.gs).
         run: clasp pull
       - name: Publier et vérifier les deux déploiements sans changer leurs URL
         run: node scripts/publish-existing-deployments.mjs
