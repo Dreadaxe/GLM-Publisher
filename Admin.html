@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{--ink:#26251f;--muted:#635f55;--line:#d8d1c5;--bg:#f4f1eb;--panel:#fff;--accent:#7c332a;--good:#20633d;--warn:#936017}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
+    header{background:#302720;color:#fff;padding:20px 24px}header h1{margin:0;font-size:1.45rem}header small{color:#d4c7b7}
+    main{max-width:1140px;margin:auto;padding:20px;display:grid;gap:16px}
+    section,.panel{background:var(--panel);border:1px solid var(--line);padding:18px;border-radius:11px}
+    h2{font-size:1.05rem;margin:0 0 12px}h3{font-size:.98rem;margin:0 0 8px}
+    label{font-weight:600;display:block;font-size:.88rem;margin-bottom:5px}
+    input,select{font:inherit;width:100%;padding:9px 10px;border:1px solid #bbb2a4;border-radius:6px;background:white;min-width:0}
+    input[type=checkbox]{width:auto;margin-right:8px}button{font:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:white;border-radius:7px;padding:9px 13px}
+    button.secondary{color:var(--accent);background:white}button:disabled{opacity:.5;cursor:not-allowed}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.grow{flex:1}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    .small{font-size:.85rem;color:var(--muted)}.status{font-size:.82rem;font-weight:600;padding:4px 8px;border-radius:100px;background:#eee}
+    .status.modified,.status.new{background:#e9f0fc;color:#294e88}.status.absent{background:#fff0e6;color:#8a431c}.status.same{background:#edf4ee;color:var(--good)}
+    .banner{border-left:4px solid var(--warn);background:#fff7e8;padding:10px 12px;border-radius:4px;margin:12px 0}
+    .error{border-left-color:#a32222;background:#ffefef}.ok{border-left-color:var(--good);background:#eef7ef}
+    .item{padding:14px 0;border-top:1px solid var(--line)}.itemhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .itemhead strong{flex:1}.itemhead select{max-width:210px}.prevwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+    .preview{background:white;border:1px solid var(--line);padding:12px;border-radius:6px;max-height:400px;overflow:auto;font:14px/1.5 Arial,sans-serif}
+    .preview h2,.preview h3{line-height:1.25}.glm-preview-heading{font-weight:700;margin:0 0 12px}.preview table{border-collapse:collapse;width:100%}.preview td{border:1px solid #999;padding:4px;vertical-align:top}
+    .preview img{max-width:100%}.preview p{margin:.65em 0}.preview .glm-empty{margin:.25em 0}.preview a{color:var(--accent)}details summary{cursor:pointer;color:var(--accent);font-weight:500}
+    .preview .glm-subsection{border-left:2px solid #e0d4c5;padding:3px 0 3px 8px;margin:.4em 0}
+    .preview .glm-subsection>summary{color:inherit;font-weight:inherit}
+    .preview .glm-subbody{padding-left:8px}
+    .preview .glm-tab-grid{display:inline-grid;white-space:pre;width:max-content;max-width:none}
+    .preview .glm-tab-cell{display:block;white-space:pre;min-width:0}
+    .preview .glm-has-tabs{overflow-x:auto;max-width:100%}
+    #message:empty{display:none}.hidden{display:none!important}footer{font-size:.8rem;color:var(--muted);padding:6px 20px 25px}
+    @media(max-width:780px){.grid,.grid3,.prevwrap{grid-template-columns:1fr}main{padding:10px}.itemhead select{max-width:none}}
+  </style>
+</head>
+<body>
+<header><h1>GLM Publisher <small>v0.5</small></h1><small>Grande Librairie de Mordheim · Espace administration</small></header>
+<main>
+  <div id="message" aria-live="polite"></div>
+  <section>
+    <div class="row"><h2 class="grow">Documents enregistrés</h2><button class="secondary" id="refresh" type="button">Actualiser</button></div>
+    <div class="grid">
+      <div><label for="documents">Choisir un document</label><select id="documents"><option value="">Chargement…</option></select></div>
+      <div class="row" style="align-items:end"><button id="inspect" type="button">Analyser les modifications</button><span id="publishedStatus" class="small"></span></div>
+    </div>
+    <div id="docDetails" class="small" style="margin-top:10px"></div>
+    <div id="tabSettings" class="hidden" style="border-top:1px solid var(--line);margin-top:13px;padding-top:12px">
+      <label for="sourceTab">Onglet Google Docs à publier</label>
+      <div class="row"><select id="sourceTab" style="flex:1;max-width:560px"></select>
+        <button class="secondary" type="button" id="saveTab">Enregistrer l’onglet</button></div>
+      <p id="tabHint" class="small" style="margin:6px 0 0"></p>
+    </div>
+  </section>
+  <section>
+    <details>
+      <summary>Ajouter un Google Doc à suivre</summary>
+      <form id="addForm" style="margin-top:14px;display:grid;gap:12px">
+        <div class="grid">
+          <div><label for="key">Identifiant de page (slug)</label><input id="key" placeholder="ex. franc-tireur-demo" required pattern="[a-z0-9][a-z0-9-]{1,63}"></div>
+          <div><label for="docUrl">URL du Google Doc</label><input id="docUrl" type="text" placeholder="https://docs.google.com/document/d/…" required></div>
+        </div>
+        <div class="grid">
+          <div><label for="tabId">Identifiant d’onglet (facultatif)</label><input id="tabId" placeholder="Déduit de l’URL si présent"></div>
+          <div><label for="siteUrl">URL de la page Google Sites existante (facultatif)</label><input id="siteUrl" placeholder="https://sites.google.com/view/…"></div>
+        </div>
+        <button type="submit" style="justify-self:start">Enregistrer ce document</button>
+      </form>
+    </details>
+  </section>
+  <section id="analysis" class="hidden">
+    <div class="row"><h2 class="grow">Analyse et validation</h2><span id="summary" class="small"></span></div>
+    <p class="small">Chaque section peut être <strong>mise à jour</strong>, <strong>conservée telle que publiée</strong>, ou <strong>retirée du site</strong>. Les suggestions Google Docs non acceptées sont exclues du rendu.</p>
+    <div id="warnings"></div>
+    <details id="changelogBox" class="hidden"><summary>Change-Log du document</summary><pre id="changelog" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+    <div id="sectionList"></div>
+    <div class="banner" id="editorialInfo">
+      <strong>Publication indépendante des discussions.</strong>
+      Les commentaires et suggestions restent dans le Google Doc d'origine.
+      Seul le texte actuellement accepté des sections choisies est publié après confirmation.
+    </div>
+    <div class="row">
+      <button id="publish" type="button">Valider et republier</button>
+      <span class="small">La version en ligne ne change qu'après confirmation.</span>
+    </div>
+  </section>
+  <section id="historyPanel" class="hidden"><h2>Historique des publications</h2><div id="history"></div></section>
+  <section>
+    <h2>Lien public à intégrer dans Google Sites</h2>
+    <p class="small">Coller ici l'URL du déploiement PUBLIC (celui qui s'exécute en tant que propriétaire). L'URL ainsi construite est celle à insérer dans la page Google Sites.</p>
+    <div class="grid">
+      <div><label for="publicBase">URL du déploiement public</label><input id="publicBase" placeholder="https://script.google.com/macros/s/…/exec"></div>
+      <div><label for="publicLink">Lien final de la publication sélectionnée</label><input id="publicLink" readonly placeholder="Sélectionner d'abord un document"></div>
+    </div>
+    <div class="row" style="margin-top:10px"><button id="copy" class="secondary" type="button">Copier le lien public</button></div>
+  </section>
+</main>
+<footer>Une édition de Google Docs ne modifie pas automatiquement Google Sites. Le panneau se connecte au registre Google Sheets commun.</footer>
+<script>
+'use strict';
+const state = { docs:[], selected:'', inspected:null, history:[], busy:false };
+const $ = id => document.getElementById(id);
+const esc = str => String(str==null?'':str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function api(fn, ...args) {
+  return new Promise((resolve,reject) => {
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(new Error(err.message || String(err))))[fn](...args);
+  });
+}
+function banner(text,kind='') {$('message').innerHTML='<div class="banner '+kind+'">'+esc(text)+'</div>';}
+function busy(on) {state.busy=on;document.querySelectorAll('button').forEach(b=>b.disabled=on);}
+async function reload(preselect) {
+  busy(true);
+  try {
+    const result=await api('adminListDocuments');
+    state.docs=result.documents;
+    $('documents').innerHTML='<option value="">— Sélectionner —</option>'+state.docs.map(d=>'<option value="'+esc(d.key)+'">'+esc(d.title)+' ('+esc(d.key)+')</option>').join('');
+    if(preselect && state.docs.some(d=>d.key===preselect)) $('documents').value=preselect;
+    selectedChanged();
+    $('message').innerHTML='';
+  } catch(e){banner(e.message,'error');}
+  finally {busy(false);}
+}
+function selectedChanged() {
+  state.selected=$('documents').value;
+  state.inspected=null;
+  $('tabSettings').classList.add('hidden');
+  $('analysis').classList.add('hidden');$('historyPanel').classList.add('hidden');
+  const row=state.docs.find(d=>d.key===state.selected);
+  $('publishedStatus').textContent=row ? (row.version ? 'Version publiée : '+row.publishedAt : 'Jamais publié') : '';
+  $('docDetails').innerHTML=row ? '<a href="https://docs.google.com/document/d/'+encodeURIComponent(row.docId)+'/edit" target="_blank" rel="noopener">Ouvrir le Google Doc</a>'+(row.siteUrl?' · <a href="'+esc(row.siteUrl)+'" target="_blank" rel="noopener">Ouvrir la page Google Sites</a>':'') : '';
+  updateLink();
+  if(state.selected) loadDocumentTabs(state.selected);
+}
+async function loadDocumentTabs(key) {
+  try {
+    const info=await api('adminListDocumentTabs',key);
+    if(state.selected!==key)return;
+    const select=$('sourceTab');
+    select.innerHTML=info.tabs.map(t=>'<option value="'+esc(t.id)+'"'+
+      (t.isChangelog?' disabled':'')+'>'+'  '.repeat(t.depth)+esc(t.title)+
+      (t.isChangelog?' (journal, non publié)':'')+'</option>').join('');
+    select.value=info.selectedTabId;
+    $('tabSettings').classList.remove('hidden');
+    $('tabHint').textContent='Onglet actif : '+(info.tabs.find(t=>t.id===info.selectedTabId)||{}).title+
+      '. Le journal « Change-log » est lu séparément et n’est jamais publié avec le texte.';
+    $('saveTab').disabled=true;
+  } catch(e){if(state.selected===key)banner('Impossible de charger les onglets : '+e.message,'error');}
+}
+async function savePublicationTab(){
+  const key=state.selected;
+  if(!key)return;
+  const selectedId=$('sourceTab').value;
+  const row=state.docs.find(d=>d.key===key);
+  if(row && row.version && !window.confirm('Ce document a déjà une version publique. Changer d’onglet changera la source des prochaines publications, pas le contenu déjà publié. Continuer ?'))return;
+  busy(true);
+  try {
+    const result=await api('adminSetPublicationTab',key,selectedId);
+    state.inspected=null;
+    $('analysis').classList.add('hidden');
+    $('historyPanel').classList.add('hidden');
+    banner('Onglet source enregistré : '+result.title+'. Relancer l’analyse avant toute publication.','ok');
+    await loadDocumentTabs(key);
+  }catch(e){banner(e.message,'error');}finally{busy(false);}
+}
+function updateLink() {
+  let base=$('publicBase').value.trim().replace(/[?&]$/,'');
+  $('publicLink').value=(base && state.selected && /^https:\/\/script\.google\.com\/macros\/s\//.test(base)) ? base+'?page='+encodeURIComponent(state.selected) : '';
+}
+function formatStatus(s){return s==='nouvelle'?'new':s==='modifiée'?'modified':s==='identique'?'same':'absent';}
+function defaultAction(s){return s.status==='nouvelle'||s.status==='modifiée'?'update':'keep';}
+function choices(s){return [['keep','Conserver en ligne'],['update','Mettre à jour'],['remove','Retirer du site']].filter(x=>!(s.status==='nouvelle'&&x[0]==='remove')&&!(s.status==='absente'&&x[0]==='update')).map(([val,label])=>'<option value="'+val+'"'+(defaultAction(s)===val?' selected':'')+'>'+label+'</option>').join('');}
+function loadPreviewFonts(sections) {
+  const supported=new Set(['Alegreya','Cardo','Cinzel','Cormorant Garamond','EB Garamond',
+    'Grenze','IM Fell English','IM Fell English SC','Lora','Merriweather','Montserrat',
+    'Noto Sans','Noto Serif','Old Standard TT','Open Sans','Oswald','Pirata One',
+    'Playfair Display','Roboto','Uncial Antiqua','UnifrakturMaguntia']);
+  const names=new Set();
+  (sections||[]).forEach(s=>(s.fonts||[]).forEach(f=>{if(supported.has(f))names.add(f);}));
+  if(!names.size)return;
+  const url='https://fonts.googleapis.com/css2?'+Array.from(names).sort()
+    .map(f=>'family='+encodeURIComponent(f)).join('&')+'&display=swap';
+  if(document.querySelector('link[data-glm-google-fonts]')) document.querySelector('link[data-glm-google-fonts]').remove();
+  const link=document.createElement('link');link.rel='stylesheet';link.href=url;
+  link.dataset.glmGoogleFonts='1';document.head.appendChild(link);
+}
+function renderInspection(data) {
+  state.inspected=data;
+  loadPreviewFonts(data.sections);
+  $('analysis').classList.remove('hidden');
+  $('summary').textContent='Onglet « '+data.selectedTabTitle+' » · '+data.sections.length+' section(s) · '+data.suggestions+' suggestion(s) · '+data.openComments+' commentaire(s) ouvert(s)';
+  const warnings=[];
+  if(data.suggestions) warnings.push('Les '+data.suggestions+' suggestion(s) en attente ne seront pas incluses dans le texte publié.');
+  if(data.openComments) warnings.push(data.openComments+' commentaire(s) encore ouvert(s) dans le Google Doc. Ils restent accessibles aux collaborateurs et ne sont pas affichés sur le site ; la publication reste possible.');
+  if(data.sections.some(s=>s.issues&&s.issues.length)) warnings.push('Certains blocs (images, équations…) ne sont pas encore pris en charge. Les sections concernées ne peuvent pas être publiées.');
+  const usedFonts=[...new Set(data.sections.flatMap(s=>s.fonts||[]))].sort();
+  if(usedFonts.length) warnings.push('Polices détectées dans le Google Doc : '+usedFonts.join(', ')+'. Les polices non disponibles sur cet appareil peuvent être remplacées visuellement.');
+  $('warnings').innerHTML=warnings.map(w=>'<div class="banner">'+esc(w)+'</div>').join('');
+  $('changelogBox').classList.toggle('hidden',!data.changelog);
+  $('changelog').textContent=data.changelog||'';
+  $('sectionList').innerHTML=data.sections.map((s,i)=>{
+    const preview=s.html||'<p>(Cette section n’existe plus dans la source.)</p>';
+    const old=s.oldHtml||'<p>(Non publié actuellement.)</p>';
+    const headingPreview=s.headingHtml ? '<div class="glm-preview-heading"'+(s.headingCss?' style="'+esc(s.headingCss)+'"':'')+'>'+s.headingHtml+'</div>' : ''; 
+    return '<div class="item">'+
+      '<div class="itemhead"><strong>'+esc(s.title)+'</strong>'+
+      '<span class="status '+formatStatus(s.status)+'">'+esc(s.status)+'</span>'+
+      '<select class="sectionAction" data-id="'+esc(s.id)+'" aria-label="Action '+esc(s.title)+'">'+choices(s)+'</select></div>'+
+      (s.issues&&s.issues.length?'<div class="banner error">'+esc(s.issues.join('; '))+'</div>':'')+
+      '<details><summary>Comparer l’ancienne version et la source</summary><div class="prevwrap">'+
+      '<div><h3>Version actuellement publiée</h3><div class="preview">'+old+'</div></div>'+
+      '<div><h3>Google Doc — aperçu sans suggestions</h3><div class="preview">'+headingPreview+preview+'</div></div></div></details></div>';
+  }).join('');
+}
+async function inspect() {
+  if(!state.selected){banner('Sélectionner un document.','error');return;}
+  busy(true);banner('Lecture du Google Doc, des suggestions et des commentaires…');
+  try {
+    const data=await api('adminInspectDocument',state.selected);
+    renderInspection(data);
+    const history=await api('adminGetHistory',state.selected);
+    state.history=history;renderHistory();
+    $('message').innerHTML='';
+  } catch(e) {banner(e.message,'error');}
+  finally{busy(false);}
+}
+function renderHistory(){
+  $('historyPanel').classList.remove('hidden');
+  $('history').innerHTML=state.history.length ? state.history.map(h=>'<div class="item row"><div class="grow"><strong>'+esc(h.at)+'</strong> · '+esc(h.summary)+'<div class="small">'+esc(h.author)+' · '+esc(h.version)+'</div></div><button class="secondary restore" data-version="'+esc(h.version)+'">Restaurer</button></div>').join('') : '<p class="small">Aucune publication.</p>';
+}
+async function publish() {
+  const data=state.inspected;
+  if(!data)return;
+  const actions=Array.from(document.querySelectorAll('.sectionAction')).map(el=>({id:el.dataset.id,action:el.value})).filter(a=>a.action!=='keep');
+  if(!actions.length){banner('Choisir au moins une section à mettre à jour ou à retirer.','error');return;}
+  if(!window.confirm('Publier '+actions.length+' section(s) dans leur état actuel ? Les commentaires et suggestions du Google Doc resteront intacts. Seule la version publique sera modifiée.'))return;
+  busy(true);
+  try {
+    const result=await api('adminPublishDocument',{
+      key:data.key,expectedVersion:data.version,fingerprint:data.fingerprint,actions
+    });
+    banner('Publication effectuée : '+result.summary,'ok');
+    const list=await api('adminListDocuments');state.docs=list.documents;
+    $('publishedStatus').textContent='Publiée : '+result.at;
+    // Nouvelle empreinte de la version active avant toute prochaine publication.
+    await inspect();
+    banner('Publication effectuée. Version : '+result.version,'ok');
+  }catch(e){banner(e.message,'error');}finally{busy(false);}
+}
+async function restore(version){
+  if(!state.inspected)return;
+  if(!window.confirm('Restaurer la version '+version+' ? Une nouvelle publication historique sera créée.'))return;
+  busy(true);
+  try {
+    const result=await api('adminRestoreDocument',{key:state.selected,version,expectedVersion:state.inspected.version});
+    await inspect();banner('Version restaurée : '+result.version,'ok');
+  }catch(e){banner(e.message,'error');}finally{busy(false);}
+}
+$('documents').addEventListener('change',selectedChanged);
+$('sourceTab').addEventListener('change',()=>{$('saveTab').disabled=false;});
+$('saveTab').addEventListener('click',savePublicationTab);
+$('refresh').addEventListener('click',()=>reload(state.selected));
+$('inspect').addEventListener('click',inspect);
+$('publish').addEventListener('click',publish);
+$('publicBase').addEventListener('input',updateLink);
+$('copy').addEventListener('click',async()=>{
+  if(!$('publicLink').value){banner('Renseigner le lien du déploiement public et choisir une page.','error');return;}
+  try{await navigator.clipboard.writeText($('publicLink').value);banner('Lien public copié.','ok');}
+  catch(e){$('publicLink').focus();$('publicLink').select();banner('Sélection du lien : le copier manuellement.');}
+});
+$('history').addEventListener('click',e=>{
+  const btn=e.target.closest('button.restore');if(btn)restore(btn.dataset.version);
+});
+$('addForm').addEventListener('submit',async e=>{
+  e.preventDefault();busy(true);
+  try {
+    const key=$('key').value.trim().toLowerCase();
+    await api('adminAddDocument',{key,url:$('docUrl').value,tabId:$('tabId').value,siteUrl:$('siteUrl').value});
+    await reload(key);$('addForm').reset();banner('Google Doc enregistré. Lancez l’analyse.','ok');
+  }catch(err){banner(err.message,'error');}finally{busy(false);}
+});
+reload();
+</script>
+</body>
+</html>
