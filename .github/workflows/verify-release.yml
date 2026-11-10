@@ -1,0 +1,50 @@
+name: Vérifier uniquement les déploiements GLM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.head_commit.message == 'Verify GLM Publisher v0.6'
+    runs-on: ubuntu-latest
+    env:
+      GLM_SCRIPT_ID: ${{ vars.GLM_SCRIPT_ID }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Configurer clasp sans modifier Google Apps Script
+        shell: bash
+        run: |
+          if [[ -z "$GLM_SCRIPT_ID" || -z "$CLASPRC_JSON" ]]; then exit 1; fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          node -e "require('fs').writeFileSync('.clasp.json', JSON.stringify({scriptId:process.env.GLM_SCRIPT_ID}))"
+      - name: Installer clasp
+        run: npm install --global @google/clasp@3.4.1
+      - name: Lire uniquement les versions effectivement déployées
+        run: |
+          node --input-type=module <<'NODE'
+          import {execFileSync} from 'node:child_process';
+          const raw=execFileSync('clasp',['list-deployments'],{encoding:'utf8'});
+          const rows=raw.split(/\r?\n/).filter(x=>x.startsWith('- '));
+          const safe=rows.map(x=>x.replace(/[A-Za-z0-9_-]{24,}/g,'[identifiant masque]'));
+          console.log('État des déploiements (sans identifiants) :');
+          for (const row of safe) console.log(row);
+          const publicOk=rows.some(x=>/@12\b/.test(x) && /GLM Public v0\.6/i.test(x));
+          const adminOk=rows.some(x=>/@12\b/.test(x) && /GLM Administration v0\.6/i.test(x));
+          console.log('Contrôle public : '+(publicOk?'OK':'ECHEC'));
+          console.log('Contrôle administration : '+(adminOk?'OK':'ECHEC'));
+          if(!publicOk || !adminOk) process.exitCode=1;
+          NODE
