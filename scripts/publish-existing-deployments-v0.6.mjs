@@ -83,10 +83,10 @@ function findRole(label, candidates, namePattern) {
 const publi = findRole('public',
   entries.filter(d=>webConfig(d).executeAs==='USER_DEPLOYING' &&
     ['ANYONE', 'ANYONE_ANONYMOUS'].includes(webConfig(d).access)),
-  /\\bpublic\\b/i);
+  /public/i);
 const admin = findRole('administration',
   entries.filter(d=>webConfig(d).executeAs==='USER_ACCESSING'),
-  /\\b(?:administration|admin)\\b/i);
+  /admin/i);
 if (!publi.deploymentId || !admin.deploymentId || publi.deploymentId===admin.deploymentId)
   throw new Error('Déploiements public et administration non distincts : publication bloquée.');
 // Adaptation au format attendu par le contrôle final historique.
