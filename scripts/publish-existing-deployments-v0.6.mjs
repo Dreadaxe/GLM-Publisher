@@ -80,12 +80,19 @@ function findRole(label, candidates, namePattern) {
   if (named.length === 1) return named[0];
   throw new Error('Publication interrompue : rôle '+label+' ambigu ('+candidates.length+' déploiements correspondants).');
 }
-const publi = findRole('public',
-  entries.filter(d=>webConfig(d).executeAs==='USER_DEPLOYING' &&
-    ['ANYONE', 'ANYONE_ANONYMOUS'].includes(webConfig(d).access)),
-  /public/i);
+const versioned = entries.filter(d => {
+  const version = Number(d.deploymentConfig?.versionNumber);
+  return Number.isInteger(version) && version > 0;
+});
+const publicByConfig = versioned.filter(d=>webConfig(d).executeAs==='USER_DEPLOYING' &&
+    ['ANYONE', 'ANYONE_ANONYMOUS'].includes(webConfig(d).access));
+// Certains déploiements existants ne remontent plus leur configuration
+// d'entrée. Dans ce cas, seul le libellé public validé précédemment suffit.
+const publicCandidates = publicByConfig.length ? publicByConfig :
+    versioned.filter(d=>/GLM Public/i.test(d.deploymentConfig?.description || ''));
+const publi = findRole('public', publicCandidates, /public/i);
 const admin = findRole('administration',
-  entries.filter(d=>webConfig(d).executeAs==='USER_ACCESSING'),
+  versioned.filter(d=>webConfig(d).executeAs==='USER_ACCESSING'),
   /admin/i);
 if (!publi.deploymentId || !admin.deploymentId || publi.deploymentId===admin.deploymentId)
   throw new Error('Déploiements public et administration non distincts : publication bloquée.');
