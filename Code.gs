@@ -1,5 +1,5 @@
 /**
- * GLM Publisher v0.5 — La Grande Librairie de Mordheim.
+ * GLM Publisher v0.6 — La Grande Librairie de Mordheim.
  * Google Docs (sources) -> validation explicite -> snapshots Sheets -> Google Sites (iframe).
  * Le contenu des Google Docs n'est JAMAIS rendu public avant publication.
  *
@@ -37,6 +37,7 @@ function setupPublisher_() {
   ensureSheet_(spreadsheet, GLM_.VERSIONS,
     ['Key', 'Version', 'TimestampUTC', 'EditorEmail', 'Summary', 'DigestSHA256']);
   ensureSheet_(spreadsheet, GLM_.CHUNKS, ['Key', 'Version', 'Part', 'Base64']);
+  ensureSheet_(spreadsheet, 'SearchIndex', ['Key', 'Version', 'SectionId', 'Titre', 'Bloc', 'Texte']);
   const owner = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
   if (!owner) throw new Error('Impossible de lire l’adresse du propriétaire. Configure GLM_ADMIN_EMAILS dans les propriétés du script.');
   const previous = (props.getProperty(GLM_.PROP_ADMINS) || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -65,6 +66,14 @@ function doGet(e) {
       return HtmlService.createHtmlOutputFromFile('Admin').setTitle('GLM Publisher — Administration');
     } catch (err) {
       return HtmlService.createHtmlOutput('<p>Accès administrateur refusé. Ouvrir le déploiement privé et autoriser votre compte Google.</p>');
+    }
+  }
+  if (query.search === '1') {
+    try {
+      return HtmlService.createHtmlOutput(glmSearchHtml_(query.q || ''))
+        .setTitle('Recherche GLM').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    } catch (err) {
+      return HtmlService.createHtmlOutput('<p>Recherche temporairement indisponible.</p>');
     }
   }
   const key = String(query.page || '');
@@ -145,7 +154,7 @@ function adminAddDocument(params) {
   if (siteUrl && !/^https:\/\//.test(siteUrl)) throw new Error('URL de Google Sites non valide (https requis).');
   const source = Docs.Documents.get(docId, {includeTabsContent: true, suggestionsViewMode: 'PREVIEW_WITHOUT_SUGGESTIONS'});
   const tabs = flattenTabs_(source.tabs || [], 0);
-  const chosen = tabId ? tabs.find(t => t.id === tabId) : tabs.find(t => !t.isChangelog);
+  const chosen = tabId ? tabs.find(t => t.id === tabId) : tabs.find(t => !t.isChangelog && !t.isMetadata);
   if (!chosen) throw new Error('Aucun onglet éditorial lisible dans ce document.');
   if (chosen.isChangelog) throw new Error('Le Change-log ne peut pas être la source publiée.');
   if (plainDocRows_().some(d => d.key === key)) throw new Error('Cet identifiant de page existe déjà.');
@@ -161,7 +170,7 @@ function flattenTabs_(tabs, depth) {
     const p = tab.tabProperties || {};
     if (tab.documentTab && tab.documentTab.body) flat.push({
       id: String(p.tabId || ''), title: String(p.title || 'Sans titre'), depth: depth || 0,
-      isChangelog: isChangeLogTitle_(p.title)
+      isChangelog: isChangeLogTitle_(p.title), isMetadata: glmIsPublicationTab_(p.title)
     });
     flat.push.apply(flat, flattenTabs_(tab.childTabs || [], (depth || 0) + 1));
   });
@@ -176,7 +185,7 @@ function adminListDocumentTabs(key) {
   const row = docRow_(key);
   const doc = Docs.Documents.get(row.docId, {includeTabsContent:true, suggestionsViewMode:'PREVIEW_WITHOUT_SUGGESTIONS'});
   const tabs = flattenTabs_(doc.tabs || [], 0);
-  const first = tabs.find(t => !t.isChangelog);
+  const first = tabs.find(t => !t.isChangelog && !t.isMetadata);
   return { tabs, selectedTabId: row.tabId || (first ? first.id : ''),
     isExplicit: !!row.tabId, published: !!row.version };
 }
@@ -187,7 +196,7 @@ function adminSetPublicationTab(key, tabId) {
   const doc = Docs.Documents.get(row.docId, {includeTabsContent:true, suggestionsViewMode:'PREVIEW_WITHOUT_SUGGESTIONS'});
   const tab = flattenTabs_(doc.tabs || [], 0).find(t => t.id === String(tabId || ''));
   if (!tab) throw new Error('Onglet introuvable dans le Google Doc.');
-  if (tab.isChangelog) throw new Error('Le Change-log est réservé au suivi : choisissez VF ou un autre onglet éditorial.');
+  if (tab.isChangelog || tab.isMetadata) throw new Error('Le Change-log et la Fiche de publication ne sont pas des sources de texte VF.');
   row.sheet.getRange(row.rowNum, 3).setValue(tab.id);
   return {ok:true, selectedTabId:tab.id, title:tab.title};
 }
@@ -210,6 +219,9 @@ function adminInspectDocument(key) {
     .filter(s => !allIds.has(s.id))
     .map(s => ({id:s.id, title:s.title, html:'', oldHtml:s.html, order:s.order, issues:[], status:'absente'}));
   return {key, docTitle:source.title, docUrl:'https://docs.google.com/document/d/'+row.docId+'/edit',
+    metadata:source.metadata, metadataWarnings:source.metadataWarnings, metadataTabFound:source.metadataTabFound,
+    oldMetadata:published ? (published.metadata || {}) : {},
+    publishedChangelog:published ? (published.changelog || '') : '',
     version:row.version, publishedAt:row.publishedAt, fingerprint:source.fingerprint,
     suggestions:source.suggestions, openComments:source.openComments,
     sections: sections.concat(stale), changelog:source.changelog,
@@ -231,10 +243,17 @@ function adminPublishDocument(options) {
   // publier un instantané du texte accepté et ne sont jamais exportés ni modifiés.
 
   const actions = Array.isArray(options.actions) ? options.actions : [];
-  if (actions.length === 0) throw new Error('Aucune action sélectionnée.');
+  if (!actions.length && !['update','remove'].includes(String(options.metadataAction||'keep')) &&
+    !['update','remove'].includes(String(options.changelogAction||'keep')))
+    throw new Error('Aucune mise à jour sélectionnée.');
   const sourceById = {};
   source.sections.forEach(s => {sourceById[s.id] = s;});
   const previous = row.version ? loadVersion_(key, row.version) : null;
+  const previousMeta = previous ? (previous.metadata || {}) : {};
+  const previousLog = previous ? (previous.changelog || '') : '';
+  const metadata = glmChoice_(previousMeta,source.metadata,String(options.metadataAction||'keep'),'la fiche');
+  const changelog = glmChoice_(previousLog,source.changelog,String(options.changelogAction||'keep'),'le Change-log');
+  const extraUpdated = !glmSame_(metadata,previousMeta) || changelog !== previousLog;
   const map = {};
   (previous ? previous.sections : []).forEach(s => { map[s.id] = s; });
   const touched = new Set();
@@ -258,7 +277,7 @@ function adminPublishDocument(options) {
       removed++;
     } else if (action !== 'keep') throw new Error('Action inconnue : ' + action);
   });
-  if (!updated && !removed) throw new Error('Sélectionnez au moins une mise à jour ou un retrait.');
+  if (!updated && !removed && !extraUpdated) throw new Error('Aucune modification à publier.');
   // Reconstituer l'ordre selon le Doc pour les sections encore présentes, puis anciennes sections figées.
   const positions = {};
   source.sections.forEach((s, i) => { positions[s.id] = i; });
@@ -267,11 +286,12 @@ function adminPublishDocument(options) {
     (positions[b.id] === undefined ? 99999 + b.order : positions[b.id]));
   sections.forEach((s,i) => {s.order=i;});
   // Le statut éditorial est conservé pour l'audit, sans publier les fils de discussion.
-  const next = {title: source.title, key, sections, editorialStatus: {
+  const next = {title: source.title, key, sections, metadata, changelog, editorialStatus: {
     openCommentsAtPublication: source.openComments,
     suggestionsAtPublication: source.suggestions
   }};
   const summary = updated + ' section(s) actualisée(s), ' + removed + ' retirée(s)' +
+    (extraUpdated ? ' ; fiche et/ou Change-log ajusté(s)' : '') +
     (source.openComments ? ' ; '+ source.openComments + ' commentaire(s) ouvert(s) conservé(s) dans Google Docs' : '') +
     (source.suggestions ? ' ; '+source.suggestions+' suggestion(s) non acceptée(s) exclue(s)' : '');
   return commit_(row, next, summary, editor);
@@ -317,6 +337,7 @@ function commit_(row, snapshot, summary, editor) {
     sheet.getRange(sheet.getLastRow()+1, 1, chunks.length, 4).setValues(chunks);
     getBook_().getSheetByName(GLM_.VERSIONS)
       .appendRow([row.key, ver, now, editor, summary, digest_(json)]);
+    glmRefreshIndex_(row.key,ver,snapshot);
     current.sheet.getRange(current.rowNum, 5, 1, 3)
       .setValues([[snapshot.title, ver, now]]);
     SpreadsheetApp.flush();
@@ -352,12 +373,13 @@ function readSource_(row) {
   const source = Docs.Documents.get(row.docId, options);
   const inline = Docs.Documents.get(row.docId, {includeTabsContent:true, suggestionsViewMode:'SUGGESTIONS_INLINE'});
   const tabs = flattenTabs_(source.tabs || [], 0);
-  const firstEditorial = tabs.find(t => !t.isChangelog);
+  const firstEditorial = tabs.find(t => !t.isChangelog && !t.isMetadata);
   const selectedId = row.tabId || (firstEditorial && firstEditorial.id);
   const selected = findTab_(source.tabs || [], selectedId);
   if (!selected || !selected.documentTab || !selected.documentTab.body)
     throw new Error('Onglet de publication introuvable. Vérifiez le choix dans le panneau d’administration.');
-  if (isChangeLogTitle_(selected.tabProperties && selected.tabProperties.title))
+  if (isChangeLogTitle_(selected.tabProperties && selected.tabProperties.title) ||
+      glmIsPublicationTab_(selected.tabProperties && selected.tabProperties.title))
     throw new Error('Le Change-log ne peut pas être publié à la place du contenu VF.');
   const sections = parseSections_(selected.documentTab.body.content || [], selected.documentTab.namedStyles || source.namedStyles);
   if (!sections.length) throw new Error('L’onglet choisi ne contient aucun texte à publier.');
@@ -367,6 +389,7 @@ function readSource_(row) {
   const changeTabMeta = tabs.find(t => t.isChangelog);
   const changeTab = changeTabMeta ? findTab_(source.tabs || [], changeTabMeta.id) : null;
   const changelogSection = sections.find(s => isChangeLogTitle_(s.title));
+  const meta = glmReadMetadata_(tabs,source);
   const changelog = changeTab && changeTab.documentTab && changeTab.documentTab.body
     ? blocksText_(changeTab.documentTab.body.content || []).slice(0,8000)
     : changelogSection ? changelogSection.text.slice(0,8000) : '';
@@ -374,10 +397,12 @@ function readSource_(row) {
   // La vérification avant publication continue de détecter les changements de
   // texte, de styles, de structure et du nombre de suggestions en attente.
   const fingerprint = digest_(JSON.stringify({title:source.title, selectedTabId:selectedId,
-    sections:sections.map(s=>[s.id,s.headingHtml,s.headingCss,s.html]), suggestions}));
+    sections:sections.map(s=>[s.id,s.headingHtml,s.headingCss,s.html]), suggestions,
+    metadata:meta.data, changelog}));
   return {title:source.title || row.title || row.key, selectedTabId:selectedId,
     selectedTabTitle:String((selected.tabProperties || {}).title || ''), sections, suggestions,
-    openComments:comments.ids.length, changelog, fingerprint};
+    openComments:comments.ids.length, changelog, metadata:meta.data,
+    metadataWarnings:meta.warnings, metadataTabFound:meta.tabFound, fingerprint};
 }
 function findTab_(tabs, wanted) {
   for (const tab of tabs || []) {
@@ -811,7 +836,16 @@ function renderPublicHtml_(snapshot) {
     .glm-unsupported{color:#a01e1e}.glm-empty{height:.2em;margin:.2em 0}
     .glm-tab-grid{display:inline-grid;vertical-align:baseline;width:max-content;white-space:pre;max-width:none}
     .glm-tab-cell{display:block;min-width:0;white-space:pre}.glm-has-tabs{overflow-x:auto;max-width:100%}
-    @media(max-width:680px){.glm{padding:0 8px 18px}
+    .glm-publication{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,32%);gap:28px;align-items:start;padding:14px 0 26px;margin-bottom:16px}
+    .glm-credits{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;font-size:.88rem}
+    .glm-credits dt{font-weight:700}.glm-credits dd{margin:0;overflow-wrap:anywhere}
+    .glm-downloads{display:flex;flex-wrap:wrap;gap:10px 18px;margin:15px 0}
+    .glm-cover{display:block}.glm-cover img{display:block;max-width:100%;height:auto;object-fit:contain}
+    .glm-description{font-style:italic}.glm-notice{font-size:.85rem;color:#555}
+    .glm-change-list{list-style:disc;padding:0 0 0 25px;line-height:1.5}
+    .glm-changelog>.glm-content{padding:12px 20px 24px}
+    @media(max-width:680px){.glm-publication{grid-template-columns:1fr;gap:12px}.glm-cover img{max-width:245px;margin:0 auto}
+    .glm{padding:0 8px 18px}
       .glm-section>summary,.glm-subsection>summary{min-height:59px;padding:15px 30px 15px 16px;font-size:1.2rem!important}
       .glm-section>summary::after,.glm-subsection>summary::after{right:11px}
       .glm-section>div,.glm-subbody{padding:10px 7px 18px}
@@ -825,7 +859,7 @@ function renderPublicHtml_(snapshot) {
   // Le nom de cette police est confirmé dans les styles Google Docs de GLM.
   // Même les anciens snapshots dépourvus de métadonnées de police profitent du chargement.
   const googleFonts = googleFontsLink_([{fonts:['UnifrakturMaguntia','Merriweather']}].concat(snapshot.sections || []));
-  let html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+fontLink+googleFonts+css+'</head><body><main class="glm" aria-label="Texte de la traduction">';
+  let html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+fontLink+googleFonts+css+'</head><body><main class="glm" aria-label="Texte de la traduction">'+glmPublicMetaHtml_(snapshot.metadata);
   const docTitle = canonicalWebTitle_(snapshot.title || '');
   (snapshot.sections || []).forEach(s => {
     if (isEmptyWebIntro_(s)) return;
@@ -842,6 +876,7 @@ function renderPublicHtml_(snapshot) {
         (s.headingHtml || escapeHtml_(s.title))+'</summary><div class="glm-content">'+body+'</div></details>';
     }
   });
-  // Pas de bouton global, pas de sommaire artificiel : seulement les vrais titres repliables.
+  // Le Change-log est figé dans la version publiée, jamais lu en direct.
+  html += glmPublicChangelogHtml_(snapshot.changelog);
   return html+'</main></body></html>';
 }

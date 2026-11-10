@@ -6,6 +6,8 @@ on:
     paths:
       - "Code.gs"
       - "Admin.html"
+      - "Publication.gs"
+      - "Search.gs"
       - "appsscript.json"
       - "scripts/**"
       - ".github/workflows/apps-script.yml"
@@ -14,6 +16,8 @@ on:
     paths:
       - "Code.gs"
       - "Admin.html"
+      - "Publication.gs"
+      - "Search.gs"
       - "appsscript.json"
       - "scripts/**"
       - ".github/workflows/apps-script.yml"
@@ -36,6 +40,7 @@ jobs:
         with:
           node-version: "22"
       - run: node scripts/verify-source.mjs
+      - run: node scripts/test-publication.mjs
 
   synchroniser:
     name: Synchroniser le brouillon Apps Script
@@ -66,12 +71,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p .clasp-stage
-          cp Code.gs Admin.html appsscript.json .clasp-stage/
+          cp Code.gs Admin.html Publication.gs Search.gs appsscript.json .clasp-stage/
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           chmod 600 "$HOME/.clasprc.json"
           node -e "const fs=require('node:fs'); fs.writeFileSync('.clasp.json',JSON.stringify({scriptId:process.env.GLM_SCRIPT_ID,rootDir:'.clasp-stage'},null,2));"
           chmod 600 .clasp.json
-          test "$(find .clasp-stage -maxdepth 1 -type f | wc -l)" -eq 3
+          test "$(find .clasp-stage -maxdepth 1 -type f | wc -l)" -eq 5
       - name: Installer clasp 3.4.1
         run: npm install --global @google/clasp@3.4.1
       - name: Vérifier la liste des fichiers envoyés

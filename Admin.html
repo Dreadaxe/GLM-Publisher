@@ -37,7 +37,7 @@
   </style>
 </head>
 <body>
-<header><h1>GLM Publisher <small>v0.5</small></h1><small>Grande Librairie de Mordheim · Espace administration</small></header>
+<header><h1>GLM Publisher <small>v0.6</small></h1><small>Grande Librairie de Mordheim · Espace administration</small></header>
 <main>
   <div id="message" aria-live="polite"></div>
   <section>
@@ -74,7 +74,24 @@
     <div class="row"><h2 class="grow">Analyse et validation</h2><span id="summary" class="small"></span></div>
     <p class="small">Chaque section peut être <strong>mise à jour</strong>, <strong>conservée telle que publiée</strong>, ou <strong>retirée du site</strong>. Les suggestions Google Docs non acceptées sont exclues du rendu.</p>
     <div id="warnings"></div>
-    <details id="changelogBox" class="hidden"><summary>Change-Log du document</summary><pre id="changelog" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+    <div class="panel" id="metadataPanel">
+      <h3>Fiche de publication (crédits, liens PDF, aperçu)</h3>
+      <p class="small" id="metaHint">La fiche est lue depuis un onglet Google Docs intitulé « Fiche de publication ».</p>
+      <div id="metaPreview" class="small" style="white-space:pre-wrap"></div>
+      <label for="metaAction" style="margin-top:10px">Action sur la fiche publique</label>
+      <select id="metaAction"><option value="keep">Conserver la fiche actuellement publiée</option>
+        <option value="update">Mettre à jour depuis Google Docs</option>
+        <option value="remove">Masquer la fiche publique</option></select>
+    </div>
+    <div class="panel" id="changelogPanel">
+      <h3>Historique éditorial public</h3>
+      <details id="changelogBox" class="hidden"><summary>Voir le Change-log source</summary>
+        <pre id="changelog" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+      <label for="changelogAction" style="margin-top:10px">Action sur le Change-log public</label>
+      <select id="changelogAction"><option value="keep">Conserver le Change-log publié</option>
+        <option value="update">Mettre à jour depuis Google Docs</option>
+        <option value="remove">Masquer le Change-log public</option></select>
+    </div>
     <div id="sectionList"></div>
     <div class="banner" id="editorialInfo">
       <strong>Publication indépendante des discussions.</strong>
@@ -94,7 +111,11 @@
       <div><label for="publicBase">URL du déploiement public</label><input id="publicBase" placeholder="https://script.google.com/macros/s/…/exec"></div>
       <div><label for="publicLink">Lien final de la publication sélectionnée</label><input id="publicLink" readonly placeholder="Sélectionner d'abord un document"></div>
     </div>
-    <div class="row" style="margin-top:10px"><button id="copy" class="secondary" type="button">Copier le lien public</button></div>
+    <div class="row" style="margin-top:10px">
+      <button id="copy" class="secondary" type="button">Copier le lien public</button>
+      <button id="reindex" class="secondary" type="button">Indexer la version déjà publiée</button>
+      <a id="searchPublicLink" href="#" target="_blank" rel="noopener noreferrer" class="small hidden">Ouvrir la recherche GLM</a>
+    </div>
   </section>
 </main>
 <footer>Une édition de Google Docs ne modifie pas automatiquement Google Sites. Le panneau se connecte au registre Google Sheets commun.</footer>
@@ -139,12 +160,12 @@ async function loadDocumentTabs(key) {
     if(state.selected!==key)return;
     const select=$('sourceTab');
     select.innerHTML=info.tabs.map(t=>'<option value="'+esc(t.id)+'"'+
-      (t.isChangelog?' disabled':'')+'>'+'  '.repeat(t.depth)+esc(t.title)+
-      (t.isChangelog?' (journal, non publié)':'')+'</option>').join('');
+      ((t.isChangelog||t.isMetadata)?' disabled':'')+'>'+'  '.repeat(t.depth)+esc(t.title)+
+      (t.isChangelog?' (journal éditorial)':'')+(t.isMetadata?' (fiche de publication)':'')+'</option>').join('');
     select.value=info.selectedTabId;
     $('tabSettings').classList.remove('hidden');
     $('tabHint').textContent='Onglet actif : '+(info.tabs.find(t=>t.id===info.selectedTabId)||{}).title+
-      '. Le journal « Change-log » est lu séparément et n’est jamais publié avec le texte.';
+      '. La fiche éditoriale et le Change-log sont lus séparément et ne sont publiés qu’après validation.';
     $('saveTab').disabled=true;
   } catch(e){if(state.selected===key)banner('Impossible de charger les onglets : '+e.message,'error');}
 }
@@ -166,7 +187,10 @@ async function savePublicationTab(){
 }
 function updateLink() {
   let base=$('publicBase').value.trim().replace(/[?&]$/,'');
-  $('publicLink').value=(base && state.selected && /^https:\/\/script\.google\.com\/macros\/s\//.test(base)) ? base+'?page='+encodeURIComponent(state.selected) : '';
+  const valid=base && /^https:\/\/script\.google\.com\/macros\/s\//.test(base);
+  $('publicLink').value=(valid && state.selected) ? base+'?page='+encodeURIComponent(state.selected) : '';
+  $('searchPublicLink').classList.toggle('hidden',!valid);
+  if(valid) $('searchPublicLink').href=base+'?search=1';
 }
 function formatStatus(s){return s==='nouvelle'?'new':s==='modifiée'?'modified':s==='identique'?'same':'absent';}
 function defaultAction(s){return s.status==='nouvelle'||s.status==='modifiée'?'update':'keep';}
@@ -199,6 +223,19 @@ function renderInspection(data) {
   $('warnings').innerHTML=warnings.map(w=>'<div class="banner">'+esc(w)+'</div>').join('');
   $('changelogBox').classList.toggle('hidden',!data.changelog);
   $('changelog').textContent=data.changelog||'';
+  const pubMeta=data.oldMetadata||{};
+  const sourceMeta=data.metadata||{};
+  const metaText=Object.entries(sourceMeta).map(([k,v])=>k+' : '+v).join('\n');
+  $('metaPreview').textContent=metaText||'(Aucune fiche de publication lisible pour cette page.)';
+  $('metaHint').textContent=data.metadataTabFound
+    ? 'La fiche a été détectée dans le Google Doc. Les liens et images doivent être publics (HTTPS).'
+    : 'Crée un onglet « Fiche de publication » dans le Google Doc pour renseigner auteurs, PDF VF/VO et aperçu.';
+  const metaChanged=JSON.stringify(pubMeta)!==JSON.stringify(sourceMeta);
+  $('metaAction').value=Object.keys(sourceMeta).length && metaChanged ? 'update':'keep';
+  const changeChanged=(data.changelog||'')!==(data.publishedChangelog||'');
+  $('changelogAction').value=data.changelog && changeChanged ? 'update':'keep';
+  (data.metadataWarnings||[]).forEach(w=>warnings.push(w));
+  $('warnings').innerHTML=warnings.map(w=>'<div class="banner">'+esc(w)+'</div>').join('');
   $('sectionList').innerHTML=data.sections.map((s,i)=>{
     const preview=s.html||'<p>(Cette section n’existe plus dans la source.)</p>';
     const old=s.oldHtml||'<p>(Non publié actuellement.)</p>';
@@ -233,12 +270,16 @@ async function publish() {
   const data=state.inspected;
   if(!data)return;
   const actions=Array.from(document.querySelectorAll('.sectionAction')).map(el=>({id:el.dataset.id,action:el.value})).filter(a=>a.action!=='keep');
-  if(!actions.length){banner('Choisir au moins une section à mettre à jour ou à retirer.','error');return;}
-  if(!window.confirm('Publier '+actions.length+' section(s) dans leur état actuel ? Les commentaires et suggestions du Google Doc resteront intacts. Seule la version publique sera modifiée.'))return;
+  const metadataAction=$('metaAction').value;
+  const changelogAction=$('changelogAction').value;
+  if(!actions.length && metadataAction==='keep' && changelogAction==='keep'){
+    banner('Sélectionner au moins une section, la fiche de publication ou le Change-log.','error');return;
+  }
+  if(!window.confirm('Publier '+actions.length+' section(s), fiche : '+metadataAction+', Change-log : '+changelogAction+' ? Les commentaires et suggestions du Google Doc resteront intacts.'))return;
   busy(true);
   try {
     const result=await api('adminPublishDocument',{
-      key:data.key,expectedVersion:data.version,fingerprint:data.fingerprint,actions
+      key:data.key,expectedVersion:data.version,fingerprint:data.fingerprint,actions,metadataAction,changelogAction
     });
     banner('Publication effectuée : '+result.summary,'ok');
     const list=await api('adminListDocuments');state.docs=list.documents;
@@ -264,6 +305,14 @@ $('refresh').addEventListener('click',()=>reload(state.selected));
 $('inspect').addEventListener('click',inspect);
 $('publish').addEventListener('click',publish);
 $('publicBase').addEventListener('input',updateLink);
+$('reindex').addEventListener('click',async()=>{
+  if(!state.selected){banner('Sélectionne d’abord une page publiée.','error');return;}
+  busy(true);
+  try{
+    const result=await api('adminRebuildSearchIndex',state.selected);
+    banner('Index public reconstruit pour '+result.key+' : '+result.entries+' entrée(s).','ok');
+  }catch(e){banner(e.message,'error');}finally{busy(false);}
+});
 $('copy').addEventListener('click',async()=>{
   if(!$('publicLink').value){banner('Renseigner le lien du déploiement public et choisir une page.','error');return;}
   try{await navigator.clipboard.writeText($('publicLink').value);banner('Lien public copié.','ok');}

@@ -3,12 +3,12 @@
 ## 1. Préparer Apps Script
 
 1. Ouvrir le projet Apps Script **GLM Publisher** existant, ou créer un projet sur [script.google.com](https://script.google.com).
-2. Copier les fichiers `Code.gs` et `Admin.html` dans le projet. Le fichier HTML doit s'appeler **Admin** dans l'éditeur.
+2. Copier les fichiers `Code.gs`, `Publication.gs`, `Search.gs` et `Admin.html` dans le projet. Le fichier HTML doit s'appeler **Admin** dans l'éditeur.
 3. Afficher le manifeste `appsscript.json` dans les paramètres du projet et y reprendre celui du dépôt.
 4. Vérifier que les services avancés **Google Docs API v1** et **Google Drive API v3** sont activés.
 5. Lors de la **première installation seulement**, enregistrer et exécuter `installerGLM()` depuis la barre d'outils Apps Script, puis autoriser les services demandés. Cette fonction crée le registre Google Sheets (onglets `Documents`, `Versions`, `Chunks`) et initialise l'administrateur.
 
-**Mise à jour depuis une version précédente :** ne pas relancer `installerGLM()`; conserver le registre Sheets et les propriétés du script.
+**Mise à jour depuis une version précédente :** ne pas relancer `installerGLM()`; conserver le registre Sheets et les propriétés du script. Pour la v0.6, voir aussi [le guide de fiche, historique et recherche](docs/V0.6-PUBLICATION.md).
 
 ## 2. Deux déploiements Web distincts
 
@@ -53,7 +53,7 @@ Les bannières, images, liens PDF, crédits et menus natifs de Google Sites rest
 
 Une fois les fichiers modifiés sur GitHub, **l'application déployée ne change pas automatiquement**.
 
-Méthode manuelle : recopier `Code.gs`, `Admin.html` et le manifeste modifié dans Apps Script, enregistrer, puis mettre les **deux déploiements** sur **Nouvelle version**.
+Méthode manuelle : recopier `Code.gs`, `Publication.gs`, `Search.gs`, `Admin.html` et le manifeste modifié dans Apps Script, enregistrer, puis mettre les **deux déploiements** sur **Nouvelle version**.
 
 **Méthode GitHub Actions (déjà préparée) :** suivre le [guide de synchronisation clasp](docs/CLASP-SYNC.md). Le workflow met à jour le **code brouillon**. Les déploiements publics et administratifs doivent être actualisés ensuite lors d'une publication validée. Les identifiants OAuth restent exclusivement dans GitHub Secrets, jamais dans les fichiers versionnés.
 

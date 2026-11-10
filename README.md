@@ -2,7 +2,7 @@
 
 Assistant de publication pour **La Grande Librairie de Mordheim** : Google Docs → validation manuelle → instantanés Google Sheets → affichage dans Google Sites.
 
-**Version actuelle : v0.5** — Prototype en cours de validation sur Google Sites.
+**Version actuelle : v0.6 (à valider)** — Publication complète : crédits, aperçu du PDF, Change-log et recherche dans les versions publiées.
 
 ## Fonctionnement
 
@@ -12,17 +12,24 @@ Assistant de publication pour **La Grande Librairie de Mordheim** : Google Docs 
 - **Google Sites** : intégration d’une application Web Apps Script de lecture, sans modifier les blocs natifs de Sites.
 - **Commentaires et suggestions** : les commentaires restent dans Google Docs ; les suggestions non acceptées ne figurent pas dans la version publique.
 - **Présentation** : sections repliables et styles avec `UnifrakturMaguntia` / `Merriweather`.
+- **Fiche de publication** : crédits, PDF, aperçu image et liens publics issus d’un onglet dédié, approuvés séparément.
+- **Change-log** : contrôlé séparément, publié depuis son onglet et jamais automatiquement.
+- **Recherche** : index indépendant des brouillons, constitué à partir des seules versions validées.
 
 ## Sources
 
 - `Code.gs` — moteur Apps Script, conversion Docs → HTML, publication et versions.
 - `Admin.html` — interface d'administration.
+- `Publication.gs` — fiche de publication et Change-log publics.
+- `Search.gs` — indexation et moteur de recherche public.
 - `appsscript.json` — manifeste et services Google requis.
 - `INSTALLATION.md` — installation, déploiement et synchronisation.
 - `CHANGELOG.md` — évolution des versions.
 - `SECURITY.md` — précautions de confidentialité et d’accès.
 
 Consultez [INSTALLATION.md](INSTALLATION.md) avant toute mise en production.
+
+**Nouveautés v0.6 :** [créer la fiche de publication, publier le Change-log et activer la recherche](docs/V0.6-PUBLICATION.md).
 
 ## Synchronisation GitHub → Apps Script
 
