@@ -55,6 +55,8 @@
       <div class="row" style="align-items:end">
         <a id="editDoc" class="doc-edit hidden" href="#" target="_blank" rel="noopener noreferrer"
           title="Ouvrir le Google Doc dans un nouvel onglet pour le modifier">✎ Modifier dans Google Docs ↗</a>
+        <a id="openDriveFolder" class="doc-edit hidden" href="#" target="_blank" rel="noopener noreferrer"
+          title="Ouvrir le dossier qui contient le document dans Google Drive">▱ Ouvrir le dossier Drive ↗</a>
         <button id="inspect" type="button">Analyser les modifications</button>
         <span id="publishedStatus" class="small"></span>
       </div>
@@ -172,6 +174,23 @@ function updateDocEditorLink(tabId) {
   if(href) $('editDoc').href=href;
   else $('editDoc').removeAttribute('href');
 }
+async function loadDocumentDriveFolder(key) {
+  const link=$('openDriveFolder');
+  link.classList.add('hidden');
+  link.removeAttribute('href');
+  link.removeAttribute('title');
+  if(!key)return;
+  try {
+    const result=await api('adminGetDocumentDriveFolder',key);
+    if(state.selected!==key)return;
+    if(!result || !result.available || !/^https:\/\/drive\.google\.com\/drive\/folders\//.test(result.folderUrl||''))return;
+    link.href=result.folderUrl;
+    link.title='Ouvrir le dossier « '+String(result.folderName||'')+' » dans Google Drive';
+    link.classList.remove('hidden');
+  } catch(e) {
+    // Ne pas bloquer l'analyse ou la publication si le dossier parent est inaccessible.
+  }
+}
 function selectedChanged() {
   state.selected=$('documents').value;
   state.inspected=null;
@@ -183,6 +202,7 @@ function selectedChanged() {
   $('docDetails').innerHTML=row && row.siteUrl ? '<a href="'+esc(row.siteUrl)+'" target="_blank" rel="noopener noreferrer">Ouvrir la page Google Sites</a>' : '';
   updateDocEditorLink(row && row.tabId);
   updateLink();
+  loadDocumentDriveFolder(state.selected);
   if(state.selected) loadDocumentTabs(state.selected);
 }
 async function loadDocumentTabs(key) {
