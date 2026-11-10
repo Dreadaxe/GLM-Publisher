@@ -135,6 +135,42 @@ function adminListDocuments() {
   return {documents: plainDocRows_(), spreadsheetUrl: getBook_().getUrl()};
 }
 
+/**
+ * Accès direct au dossier parent du Google Doc, réservé à l'administration.
+ * Utilise l'API Drive v3 déjà activée : pas de nouvelle autorisation requise.
+ * L'information n'est jamais incluse dans les instantanés ou les pages publiques.
+ */
+function adminGetDocumentDriveFolder(key) {
+  assertAdmin_();
+  assertKey_(key);
+  const row = docRow_(key);
+  const file = Drive.Files.get(row.docId, {
+    fields: 'id,name,mimeType,parents,driveId',
+    supportsAllDrives: true
+  });
+  const parentId = Array.isArray(file.parents) ? String(file.parents[0] || '') : '';
+  if (!/^[A-Za-z0-9_-]{10,}$/.test(parentId)) {
+    return {available:false, reason:'Emplacement du dossier non communiqué par Google Drive.'};
+  }
+  try {
+    const folder = Drive.Files.get(parentId, {
+      fields: 'id,name,mimeType,webViewLink,driveId',
+      supportsAllDrives: true
+    });
+    if (folder.mimeType !== 'application/vnd.google-apps.folder')
+      return {available:false, reason:'L’emplacement parent ne correspond pas à un dossier.'};
+    const url = String(folder.webViewLink || '');
+    return {
+      available:true,
+      folderName:String(folder.name || 'Dossier du document'),
+      folderUrl:/^https:\/\/drive\.google\.com\/drive\/folders\//.test(url)
+        ? url : 'https://drive.google.com/drive/folders/'+encodeURIComponent(parentId)
+    };
+  } catch (err) {
+    return {available:false, reason:'Le dossier parent est inaccessible avec ce compte Google.'};
+  }
+}
+
 function docIdFromUrl_(value) {
   const raw = String(value || '').trim();
   const match = raw.match(/\/document\/d\/([A-Za-z0-9_-]{20,})/) || raw.match(/^([A-Za-z0-9_-]{20,})$/);
