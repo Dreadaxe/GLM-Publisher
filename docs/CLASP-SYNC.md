@@ -6,7 +6,7 @@ Le workflow `.github/workflows/apps-script.yml` synchronise **uniquement le code
 
 - Contrôle syntaxique de `Code.gs`, présence de `Admin.html` et vérification du manifeste par `scripts/verify-source.mjs`.
 - Workflow GitHub Actions pour GitHub → Apps Script.
-- Envoi strictement limité à `Code.gs`, `Admin.html` et `appsscript.json` grâce au répertoire temporaire `.clasp-stage`.
+- Envoi strictement limité à `Code.gs`, `Admin.html`, `Publication.gs`, `Search.gs` et `appsscript.json` grâce au répertoire temporaire `.clasp-stage`.
 - Version fixée de clasp : `@google/clasp@3.4.1`, avec Node.js 22.
 - Aucun `clasp push` exécuté tant que les paramètres Google ne sont pas configurés.
 
