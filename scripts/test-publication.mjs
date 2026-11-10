@@ -87,6 +87,10 @@ const driveContext=createContext({
   }}}
 });
 runInContext(sourceCode,driveContext);
+// Les déclarations de Code.gs remplacent les mocks globaux : réinjecter après chargement.
+driveContext.assertAdmin_=()=>{adminChecks++;};
+driveContext.assertKey_=key=>{if(!key)throw new Error('Clé manquante');};
+driveContext.docRow_=()=>({docId:'1-WXmi_Vl2d6wJEMd3dFS_gZKU0O1On4gMdMSMQ6Zo3M'});
 const driveFolder=driveContext.adminGetDocumentDriveFolder('cavalcade-maudite');
 assert.equal(adminChecks,1,'L’accès au dossier doit valider les droits admin');
 assert.equal(calls.length,2,'Le document et son parent doivent être lus');
@@ -102,5 +106,7 @@ const denyContext=createContext({
   Drive:{Files:{get:()=>{throw new Error('Aucun accès sans autorisation');}}}
 });
 runInContext(sourceCode,denyContext);
+denyContext.assertAdmin_=()=>{throw new Error('Accès interdit');};
+denyContext.docRow_=()=>{throw new Error('La lecture ne doit pas être appelée');};
 assert.throws(()=>denyContext.adminGetDocumentDriveFolder('cavalcade-maudite'),/Accès interdit/);
 console.log('OK : accès au dossier parent Google Drive limité aux administrateurs.');
