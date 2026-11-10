@@ -67,3 +67,40 @@ assert.equal(search.glmRefreshIndex_('cavalcade-maudite','new',snapshot),1);
 assert.equal(rows.filter(r=>r[0]==='cavalcade-maudite').length,1);
 assert.equal(rows.find(r=>r[0]==='cavalcade-maudite')[1],'new');
 console.log('OK : fiche, liens, XSS, changelog, restauration de choix et recherche sur snapshots publiés.');
+
+
+// L'emplacement Drive ne doit être accessible qu'après contrôle administrateur.
+const sourceCode=readFileSync('Code.gs','utf8');
+let adminChecks=0;
+const calls=[];
+const driveContext=createContext({
+  assertAdmin_:()=>{adminChecks++;},
+  assertKey_:key=>{if(!key)throw new Error('Clé manquante');},
+  docRow_:()=>({docId:'1-WXmi_Vl2d6wJEMd3dFS_gZKU0O1On4gMdMSMQ6Zo3M'}),
+  Drive:{Files:{get:(id,options)=>{
+    calls.push({id,options});
+    if(id==='1-WXmi_Vl2d6wJEMd3dFS_gZKU0O1On4gMdMSMQ6Zo3M')
+      return {parents:['1hOPb0J_ugfh_21Eerj__VFurJdMbDzq6']};
+    return {name:'Cavalcade Maudite - Cursed Cavalcade',
+      mimeType:'application/vnd.google-apps.folder',
+      webViewLink:'https://drive.google.com/drive/folders/1hOPb0J_ugfh_21Eerj__VFurJdMbDzq6'};
+  }}}
+});
+runInContext(sourceCode,driveContext);
+const driveFolder=driveContext.adminGetDocumentDriveFolder('cavalcade-maudite');
+assert.equal(adminChecks,1,'L’accès au dossier doit valider les droits admin');
+assert.equal(calls.length,2,'Le document et son parent doivent être lus');
+assert.ok(calls.every(c=>c.options.supportsAllDrives===true),'Support Drives partagés');
+assert.equal(driveFolder.available,true);
+assert.equal(driveFolder.folderName,'Cavalcade Maudite - Cursed Cavalcade');
+assert.equal(driveFolder.folderUrl,
+  'https://drive.google.com/drive/folders/1hOPb0J_ugfh_21Eerj__VFurJdMbDzq6');
+const denyContext=createContext({
+  assertAdmin_:()=>{throw new Error('Accès interdit');},
+  assertKey_:()=>{},
+  docRow_:()=>{throw new Error('La lecture ne doit pas être appelée');},
+  Drive:{Files:{get:()=>{throw new Error('Aucun accès sans autorisation');}}}
+});
+runInContext(sourceCode,denyContext);
+assert.throws(()=>denyContext.adminGetDocumentDriveFolder('cavalcade-maudite'),/Accès interdit/);
+console.log('OK : accès au dossier parent Google Drive limité aux administrateurs.');
