@@ -50,6 +50,6 @@ jobs:
         run: npm install --global @google/clasp@3.4.1
       - name: Synchroniser exactement le code validé depuis GitHub
         run: clasp push --force
-      # Identification sécurisée par les droits Apps Script (sans divulguer les identifiants).
+      # Sélection : libellé public historique et identité d'exécution de l'administration.
       - name: Publier la v0.6 sur les déploiements existants et vérifier
         run: node scripts/publish-existing-deployments-v0.6.mjs
