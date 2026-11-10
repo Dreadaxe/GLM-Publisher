@@ -1,0 +1,54 @@
+name: Publier GLM Publisher v0.6 (déploiements existants)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-v0.6.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: glm-clasp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publier:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.head_commit.message == 'Deploy GLM Publisher v0.6 now'
+    runs-on: ubuntu-latest
+    environment: apps-script
+    env:
+      GLM_SCRIPT_ID: ${{ vars.GLM_SCRIPT_ID }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Vérifier les sources et les tests v0.6
+        run: |
+          node scripts/verify-source.mjs
+          node scripts/test-publication.mjs
+      - name: Préparer l'authentification et les cinq fichiers Apps Script
+        shell: bash
+        run: |
+          if [[ -z "$GLM_SCRIPT_ID" || -z "$CLASPRC_JSON" ]]; then
+            echo "::error::Configurer GLM_SCRIPT_ID et CLASPRC_JSON dans GitHub."
+            exit 1
+          fi
+          mkdir -p .clasp-stage
+          cp Code.gs Admin.html Publication.gs Search.gs appsscript.json .clasp-stage/
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          node -e "const fs=require('node:fs');fs.writeFileSync('.clasp.json', JSON.stringify({scriptId:process.env.GLM_SCRIPT_ID,rootDir:'.clasp-stage'}));"
+          test "$(find .clasp-stage -maxdepth 1 -type f | wc -l)" -eq 5
+      - name: Installer clasp
+        run: npm install --global @google/clasp@3.4.1
+      - name: Synchroniser exactement le code validé depuis GitHub
+        run: clasp push --force
+      - name: Publier la v0.6 sur les déploiements existants et vérifier
+        run: node scripts/publish-existing-deployments-v0.6.mjs
