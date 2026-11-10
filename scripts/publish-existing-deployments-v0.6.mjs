@@ -33,12 +33,65 @@ const source = fs.readFileSync(sourceFile,'utf8');
 if (!source.includes('GLM Publisher v0.6') || !source.includes('UnifrakturMaguntia')) {
   throw new Error('Publication interrompue : le brouillon Apps Script ne correspond pas à GLM Publisher v0.6.');
 }
-const inventory = clasp(['list-deployments']);
-console.log('Descriptions des déploiements (IDs masqués) : '+inventory.replace(/[A-Za-z0-9_-]{24,}/g, '[ID]'));
-const list = listDeployments(inventory);
-const publi = findOne(list, /\bpublic\b/i, 'GLM Public');
-const admin = findOne(list, /\b(?:administration|admin)\b/i, 'GLM Administration');
-if (publi.id === admin.id) throw new Error('Déploiements identiques : opération interrompue.');
+// Lire la configuration effective des applications web plutôt que se fier aux
+// descriptions libres, parfois vides dans Apps Script.
+async function getDeployments() {
+  const path = new URL('.clasprc.json', 'file://' + process.env.HOME + '/');
+  const auth = JSON.parse(fs.readFileSync(path, 'utf8'));
+  const token = auth.tokens?.default || auth;
+  if (!token?.refresh_token || !token.client_id || !token.client_secret) {
+    throw new Error('Impossible de retrouver les identifiants OAuth clasp.');
+  }
+  const refreshed = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({
+      grant_type:'refresh_token',
+      refresh_token:token.refresh_token,
+      client_id:token.client_id,
+      client_secret:token.client_secret
+    })
+  });
+  if (!refreshed.ok) throw new Error('Impossible de rafraîchir OAuth : statut '+refreshed.status);
+  const {access_token} = await refreshed.json();
+  if (!access_token) throw new Error('Jeton OAuth non reçu.');
+  const scriptId = process.env.GLM_SCRIPT_ID;
+  if (!scriptId) throw new Error('GLM_SCRIPT_ID absent.');
+  const response = await fetch('https://script.googleapis.com/v1/projects/'+encodeURIComponent(scriptId)+'/deployments?pageSize=100', {
+    headers:{Authorization:'Bearer '+access_token}
+  });
+  if (!response.ok) throw new Error('Lecture de la configuration des déploiements refusée : statut '+response.status);
+  const data = await response.json();
+  if (data.nextPageToken) throw new Error('Inventaire incomplet : pagination à gérer avant publication.');
+  return data.deployments || [];
+}
+const entries = await getDeployments();
+function webConfig(d) {
+  return d.entryPoints?.find(p=>p.entryPointType==='WEB_APP')?.webApp?.entryPointConfig || {};
+}
+console.log('Inventaire des applications (sans URL ni identifiants) : '+JSON.stringify(entries.map(d=>({
+  version:d.deploymentConfig?.versionNumber,
+  description:d.deploymentConfig?.description || '(aucune)',
+  executeAs:webConfig(d).executeAs || '(inconnu)',
+  access:webConfig(d).access || '(inconnu)'
+}))));
+function findRole(label, candidates, namePattern) {
+  if (candidates.length === 1) return candidates[0];
+  const named = candidates.filter(d=>namePattern.test(d.deploymentConfig?.description || ''));
+  if (named.length === 1) return named[0];
+  throw new Error('Publication interrompue : rôle '+label+' ambigu ('+candidates.length+' déploiements correspondants).');
+}
+const publi = findRole('public',
+  entries.filter(d=>webConfig(d).executeAs==='USER_DEPLOYING' &&
+    ['ANYONE', 'ANYONE_ANONYMOUS'].includes(webConfig(d).access)),
+  /\\bpublic\\b/i);
+const admin = findRole('administration',
+  entries.filter(d=>webConfig(d).executeAs==='USER_ACCESSING'),
+  /\\b(?:administration|admin)\\b/i);
+if (!publi.deploymentId || !admin.deploymentId || publi.deploymentId===admin.deploymentId)
+  throw new Error('Déploiements public et administration non distincts : publication bloquée.');
+// Adaptation au format attendu par le contrôle final historique.
+publi.id=publi.deploymentId;
+admin.id=admin.deploymentId;
 console.log('Deux déploiements distincts identifiés : GLM Public et GLM Administration.');
 console.log('Création d’une version immuable du brouillon v0.6.');
 const versionResult = clasp(['create-version','GLM Publisher v0.6 - rendu GLM']);
