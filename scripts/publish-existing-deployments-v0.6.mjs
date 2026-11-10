@@ -33,7 +33,9 @@ const source = fs.readFileSync(sourceFile,'utf8');
 if (!source.includes('GLM Publisher v0.6') || !source.includes('UnifrakturMaguntia')) {
   throw new Error('Publication interrompue : le brouillon Apps Script ne correspond pas à GLM Publisher v0.6.');
 }
-const list = listDeployments(clasp(['list-deployments']));
+const inventory = clasp(['list-deployments']);
+console.log('Descriptions des déploiements (IDs masqués) : '+inventory.replace(/[A-Za-z0-9_-]{24,}/g, '[ID]'));
+const list = listDeployments(inventory);
 const publi = findOne(list, /\bpublic\b/i, 'GLM Public');
 const admin = findOne(list, /\b(?:administration|admin)\b/i, 'GLM Administration');
 if (publi.id === admin.id) throw new Error('Déploiements identiques : opération interrompue.');
