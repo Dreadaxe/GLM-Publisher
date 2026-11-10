@@ -34,6 +34,8 @@
     .preview{background:white;border:1px solid var(--line);padding:12px;border-radius:6px;max-height:400px;overflow:auto;font:14px/1.5 Arial,sans-serif}
     .preview h2,.preview h3{line-height:1.25}.glm-preview-heading{font-weight:700;margin:0 0 12px}.preview table{border-collapse:collapse;width:100%}.preview td{border:1px solid #999;padding:4px;vertical-align:top}
     .preview img{max-width:100%}.preview p{margin:.65em 0}.preview .glm-empty{margin:.25em 0}.preview a{color:var(--accent)}details summary{cursor:pointer;color:var(--accent);font-weight:500}
+    #historyDisclosure>summary{font-size:1.05rem;font-weight:700;color:var(--ink)}
+    #historyDisclosure[open]>summary{margin-bottom:12px}
     .preview .glm-subsection{border-left:2px solid #e0d4c5;padding:3px 0 3px 8px;margin:.4em 0}
     .preview .glm-subsection>summary{color:inherit;font-weight:inherit}
     .preview .glm-subbody{padding-left:8px}
@@ -119,7 +121,7 @@
       <span class="small">La version en ligne ne change qu'après confirmation.</span>
     </div>
   </section>
-  <section id="historyPanel" class="hidden"><h2>Historique des publications</h2><div id="history"></div></section>
+  <section id="historyPanel" class="hidden"><details id="historyDisclosure"><summary>Historique des publications</summary><div id="history"></div></details></section>
   <section>
     <h2>Lien public à intégrer dans Google Sites</h2>
     <p class="small">Coller ici l'URL du déploiement PUBLIC (celui qui s'exécute en tant que propriétaire). L'URL ainsi construite est celle à insérer dans la page Google Sites.</p>
@@ -196,7 +198,7 @@ function selectedChanged() {
   state.inspected=null;
   $('tabSettings').classList.add('hidden');
   $('docTabLinks').replaceChildren();
-  $('analysis').classList.add('hidden');$('historyPanel').classList.add('hidden');
+  $('analysis').classList.add('hidden');$('historyPanel').classList.add('hidden');$('historyDisclosure').open=false;
   const row=state.docs.find(d=>d.key===state.selected);
   $('publishedStatus').textContent=row ? (row.version ? 'Version publiée : '+row.publishedAt : 'Jamais publié') : '';
   $('docDetails').innerHTML=row && row.siteUrl ? '<a href="'+esc(row.siteUrl)+'" target="_blank" rel="noopener noreferrer">Ouvrir la page Google Sites</a>' : '';
@@ -240,6 +242,7 @@ async function savePublicationTab(){
     state.inspected=null;
     $('analysis').classList.add('hidden');
     $('historyPanel').classList.add('hidden');
+    $('historyDisclosure').open=false;
     banner('Onglet source enregistré : '+result.title+'. Relancer l’analyse avant toute publication.','ok');
     await loadDocumentTabs(key);
   }catch(e){banner(e.message,'error');}finally{busy(false);}
