@@ -1,0 +1,53 @@
+name: Publier uniquement le panneau administration GLM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deploy-admin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: glm-clasp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deployer:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.head_commit.message == 'Deploy GLM admin public links now'
+    runs-on: ubuntu-latest
+    environment: apps-script
+    env:
+      GLM_SCRIPT_ID: ${{ vars.GLM_SCRIPT_ID }}
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Vérifier les sources et la configuration de l'URL publique
+        run: |
+          node scripts/verify-source.mjs
+          node scripts/test-publication.mjs
+      - name: Configurer clasp pour le projet existant
+        shell: bash
+        run: |
+          if [[ -z "$GLM_SCRIPT_ID" || -z "$CLASPRC_JSON" ]]; then
+            echo "::error::Variables GLM_SCRIPT_ID ou CLASPRC_JSON manquantes."
+            exit 1
+          fi
+          mkdir -p .clasp-stage
+          cp Code.gs Admin.html Publication.gs Search.gs appsscript.json .clasp-stage/
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+          node -e "require('node:fs').writeFileSync('.clasp.json',JSON.stringify({scriptId:process.env.GLM_SCRIPT_ID,rootDir:'.clasp-stage'}))"
+      - name: Installer clasp
+        run: npm install --global @google/clasp@3.4.1
+      - name: Synchroniser exactement la version vérifiée
+        run: clasp push --force
+      - name: Publier uniquement GLM Administration sans changer son URL
+        run: node scripts/deploy-admin-only.mjs
