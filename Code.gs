@@ -9,6 +9,7 @@
 const GLM_ = Object.freeze({
   PROP_SHEET: 'GLM_SPREADSHEET_ID',
   PROP_ADMINS: 'GLM_ADMIN_EMAILS',
+  PROP_PUBLIC_BASE: 'GLM_PUBLIC_DEPLOYMENT_URL',
   DOCUMENTS: 'Documents',
   VERSIONS: 'Versions',
   CHUNKS: 'Chunks',
@@ -133,6 +134,29 @@ function plainDocRows_() {
 function adminListDocuments() {
   assertAdmin_();
   return {documents: plainDocRows_(), spreadsheetUrl: getBook_().getUrl()};
+}
+
+/**
+ * URL du déploiement public, enregistrée une seule fois pour toutes les
+ * publications. Ne jamais déduire celle-ci de l'URL du panneau admin :
+ * les deux déploiements ont des identifiants distincts.
+ */
+function glmNormalizePublicDeploymentUrl_(url) {
+  const value = String(url || '').trim().replace(/\/+$/, '');
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/.test(value)) {
+    throw new Error('Adresse invalide : collez uniquement l’URL /exec du déploiement PUBLIC, sans ?page= ni ?admin=1.');
+  }
+  return value;
+}
+function adminGetPublicDeploymentUrl() {
+  assertAdmin_();
+  return String(PropertiesService.getScriptProperties().getProperty(GLM_.PROP_PUBLIC_BASE) || '');
+}
+function adminSetPublicDeploymentUrl(url) {
+  assertAdmin_();
+  const value = glmNormalizePublicDeploymentUrl_(url);
+  PropertiesService.getScriptProperties().setProperty(GLM_.PROP_PUBLIC_BASE, value);
+  return value;
 }
 
 /**
