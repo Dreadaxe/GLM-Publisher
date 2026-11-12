@@ -110,3 +110,36 @@ denyContext.assertAdmin_=()=>{throw new Error('Accès interdit');};
 denyContext.docRow_=()=>{throw new Error('La lecture ne doit pas être appelée');};
 assert.throws(()=>denyContext.adminGetDocumentDriveFolder('cavalcade-maudite'),/Accès interdit/);
 console.log('OK : accès au dossier parent Google Drive limité aux administrateurs.');
+
+
+// Le lien du panneau administrateur ne doit jamais être utilisé automatiquement
+// pour construire les URL publiques : elles sont explicitement configurées.
+const deploymentProps={};
+let deploymentAdminChecks=0;
+const deploymentContext=createContext({
+  PropertiesService:{getScriptProperties:()=>({
+    getProperty:key=>deploymentProps[key] || null,
+    setProperty:(key,value)=>{deploymentProps[key]=value;}
+  })}
+});
+runInContext(sourceCode,deploymentContext);
+deploymentContext.assertAdmin_=()=>{deploymentAdminChecks++;};
+assert.equal(deploymentContext.adminGetPublicDeploymentUrl(),'');
+const samplePublic='https://script.google.com/macros/s/AKfycbwBmSDNnD9H9IOZ8wm9TpqPKTSecurePublicAppID/exec';
+assert.equal(deploymentContext.adminSetPublicDeploymentUrl(' '+samplePublic+' '),samplePublic);
+assert.equal(deploymentContext.adminGetPublicDeploymentUrl(),samplePublic);
+assert.equal(deploymentAdminChecks,3);
+for(const bad of [
+  samplePublic+'?admin=1',
+  samplePublic+'?page=cavalcade-maudite',
+  'https://example.com/macros/s/AKfycbwBmSDNnD9H9IOZ8wm9TpqPKT/exec',
+  'javascript:alert(1)',
+  ''
+]){
+  assert.throws(()=>deploymentContext.adminSetPublicDeploymentUrl(bad),/Adresse invalide/);
+}
+assert.equal(deploymentContext.adminGetPublicDeploymentUrl(),samplePublic);
+deploymentContext.assertAdmin_=()=>{throw new Error('Accès administrateur refusé');};
+assert.throws(()=>deploymentContext.adminGetPublicDeploymentUrl(),/Accès administrateur refusé/);
+assert.throws(()=>deploymentContext.adminSetPublicDeploymentUrl(samplePublic),/Accès administrateur refusé/);
+console.log('OK : URL publique mémorisée, validée et accessible uniquement aux administrateurs.');
