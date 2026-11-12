@@ -164,7 +164,7 @@ function api(fn, ...args) {
   });
 }
 function banner(text,kind='') {$('message').innerHTML='<div class="banner '+kind+'">'+esc(text)+'</div>';}
-function busy(on) {state.busy=on;document.querySelectorAll('button').forEach(b=>b.disabled=on);}
+function busy(on) {state.busy=on;document.querySelectorAll('button').forEach(b=>b.disabled=on);if(!on)$('copy').disabled=!$('publicLink').value;}
 async function reload(preselect) {
   busy(true);
   try {
