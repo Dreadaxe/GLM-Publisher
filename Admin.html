@@ -21,6 +21,14 @@
       font:inherit;font-weight:600;text-decoration:none;white-space:nowrap}
     .doc-edit:hover,.doc-tab-link:hover{background:#f8eee9}
     .doc-edit:focus-visible,.doc-tab-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .public-link-row{display:flex;gap:7px;align-items:center;min-width:0}
+    .public-link-row input{flex:1;min-width:0}
+    button.copy-link{width:44px;height:44px;flex:0 0 44px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-color:var(--line);background:#fff;color:var(--accent)}
+    button.copy-link:hover{background:#f8eee9;border-color:var(--accent)}
+    button.copy-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    button.copy-link svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+    #publicSettings{margin-top:14px}
+    #publicSettings>summary{font-size:.9rem}
     .doc-tab-link{display:inline-flex;align-items:center;padding:6px 10px;
       border:1px solid var(--line);border-radius:6px;color:var(--accent);text-decoration:none}
     .grow{flex:1}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -124,13 +132,21 @@
   <section id="historyPanel" class="hidden"><details id="historyDisclosure"><summary>Historique des publications</summary><div id="history"></div></details></section>
   <section>
     <h2>Lien public à intégrer dans Google Sites</h2>
-    <p class="small">Coller ici l'URL du déploiement PUBLIC (celui qui s'exécute en tant que propriétaire). L'URL ainsi construite est celle à insérer dans la page Google Sites.</p>
-    <div class="grid">
-      <div><label for="publicBase">URL du déploiement public</label><input id="publicBase" placeholder="https://script.google.com/macros/s/…/exec"></div>
-      <div><label for="publicLink">Lien final de la publication sélectionnée</label><input id="publicLink" readonly placeholder="Sélectionner d'abord un document"></div>
+    <p class="small">Le lien est généré automatiquement pour le document choisi à partir du déploiement public enregistré.</p>
+    <label for="publicLink">Lien final de la publication sélectionnée</label>
+    <div class="public-link-row">
+      <input id="publicLink" readonly placeholder="Sélectionner un document et configurer le déploiement public">
+      <button id="copy" class="copy-link" type="button" title="Copier le lien public" aria-label="Copier le lien public" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
     </div>
+    <div id="publicLinkHint" class="small" role="status" aria-live="polite"></div>
+    <details id="publicSettings">
+      <summary>Configurer l’URL du déploiement public</summary>
+      <p class="small">Une seule configuration pour toutes les pages. Cette URL est différente de celle du panneau d'administration. Elle doit être celle du déploiement qui s'exécute en tant que propriétaire, sans paramètres.</p>
+      <label for="publicBase">URL du déploiement PUBLIC</label>
+      <input id="publicBase" type="url" spellcheck="false" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+      <p id="publicBaseHint" class="small" role="status" aria-live="polite">L'adresse sera enregistrée automatiquement après modification.</p>
+    </details>
     <div class="row" style="margin-top:10px">
-      <button id="copy" class="secondary" type="button">Copier le lien public</button>
       <button id="reindex" class="secondary" type="button">Indexer la version déjà publiée</button>
       <a id="searchPublicLink" href="#" target="_blank" rel="noopener noreferrer" class="small hidden">Ouvrir la recherche GLM</a>
     </div>
@@ -139,7 +155,7 @@
 <footer>Une édition de Google Docs ne modifie pas automatiquement Google Sites. Le panneau se connecte au registre Google Sheets commun.</footer>
 <script>
 'use strict';
-const state = { docs:[], selected:'', inspected:null, history:[], busy:false };
+const state = { docs:[], selected:'', inspected:null, history:[], busy:false, publicBase:'' };
 const $ = id => document.getElementById(id);
 const esc = str => String(str==null?'':str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function api(fn, ...args) {
@@ -248,11 +264,47 @@ async function savePublicationTab(){
   }catch(e){banner(e.message,'error');}finally{busy(false);}
 }
 function updateLink() {
-  let base=$('publicBase').value.trim().replace(/[?&]$/,'');
-  const valid=base && /^https:\/\/script\.google\.com\/macros\/s\//.test(base);
+  const base=state.publicBase;
+  const valid=/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/.test(base);
   $('publicLink').value=(valid && state.selected) ? base+'?page='+encodeURIComponent(state.selected) : '';
+  $('copy').disabled=state.busy || !$('publicLink').value;
+  $('publicLinkHint').textContent=valid
+    ? (state.selected ? 'Prêt à intégrer dans Google Sites.' : 'Choisir un document pour générer son lien public.')
+    : 'Configurer une fois l’adresse du déploiement PUBLIC ci-dessous.';
   $('searchPublicLink').classList.toggle('hidden',!valid);
   if(valid) $('searchPublicLink').href=base+'?search=1';
+}
+async function loadPublicDeploymentUrl(){
+  try{
+    const url=await api('adminGetPublicDeploymentUrl');
+    state.publicBase=url||'';
+    $('publicBase').value=state.publicBase;
+    $('publicSettings').open=!state.publicBase;
+    $('publicBaseHint').textContent=state.publicBase
+      ? 'Adresse publique enregistrée pour toutes les publications.'
+      : 'Indiquer une fois l’URL du déploiement PUBLIC (pas l’URL du panneau admin). Elle sera ensuite mémorisée.';
+  }catch(e){
+    $('publicSettings').open=true;
+    $('publicBaseHint').textContent='Impossible de charger l’adresse enregistrée : '+e.message;
+  }
+  updateLink();
+}
+async function savePublicDeploymentUrl(){
+  const value=$('publicBase').value.trim();
+  if(!value || value===state.publicBase){
+    $('publicBaseHint').textContent=value ? 'Adresse publique déjà enregistrée.' : 'Adresse manquante : aucune modification enregistrée.';
+    return;
+  }
+  $('publicBaseHint').textContent='Enregistrement de l’adresse publique…';
+  try{
+    const saved=await api('adminSetPublicDeploymentUrl',value);
+    state.publicBase=saved;
+    $('publicBase').value=saved;
+    $('publicBaseHint').textContent='Adresse publique enregistrée pour toutes les publications.';
+    updateLink();
+  }catch(e){
+    $('publicBaseHint').textContent='Adresse non enregistrée : '+e.message;
+  }
 }
 function formatStatus(s){return s==='nouvelle'?'new':s==='modifiée'?'modified':s==='identique'?'same':'absent';}
 function defaultAction(s){return s.status==='nouvelle'||s.status==='modifiée'?'update':'keep';}
@@ -369,7 +421,8 @@ $('saveTab').addEventListener('click',savePublicationTab);
 $('refresh').addEventListener('click',()=>reload(state.selected));
 $('inspect').addEventListener('click',inspect);
 $('publish').addEventListener('click',publish);
-$('publicBase').addEventListener('input',updateLink);
+$('publicBase').addEventListener('input',()=>{ $('publicBaseHint').textContent='Adresse modifiée : validation à la sortie du champ.'; });
+$('publicBase').addEventListener('change',savePublicDeploymentUrl);
 $('reindex').addEventListener('click',async()=>{
   if(!state.selected){banner('Sélectionne d’abord une page publiée.','error');return;}
   busy(true);
@@ -394,7 +447,7 @@ $('addForm').addEventListener('submit',async e=>{
     await reload(key);$('addForm').reset();banner('Google Doc enregistré. Lancez l’analyse.','ok');
   }catch(err){banner(err.message,'error');}finally{busy(false);}
 });
-reload();
+loadPublicDeploymentUrl().then(()=>reload());
 </script>
 </body>
 </html>
